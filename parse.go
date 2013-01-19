@@ -77,10 +77,11 @@ func main() {
 		varName = true
 		test=	10
 		`)
+	fmt.Printf("%s\n", in.GetInput())
 	out, ok := pg.Many(Assignment())(in)
 
 	fmt.Printf("-------\n")
-	fmt.Printf("Parse ok: %b\n", ok)
+	fmt.Printf("Parse ok: %t\n", ok)
 	fmt.Printf("Last position: %d\n", in.GetPosition())
 	fmt.Printf("Parsed: -%s-\n", out)
 }

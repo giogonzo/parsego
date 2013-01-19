@@ -8,6 +8,7 @@ import (
 type State interface {
 	Next() (int, bool)
 	SetInput(in string)
+	GetInput() string
 	GetPosition() int
 	SetPosition(position int)
 }
@@ -27,14 +28,20 @@ type StringState struct {
 
 func (self *StringState) Next() (int, bool) {
 	if self.position >= len(self.input) {
+		fmt.Print("\n")
 		return 0, false
 	}
 	self.position += 1
+	fmt.Printf("%c", self.input[self.position-1])
 	return int(self.input[self.position-1]), true
 }
 
 func (self *StringState) SetInput(in string) {
 	self.input = []byte(in)
+}
+
+func (self *StringState) GetInput() string {
+	return string(self.input)
 }
 
 func (self *StringState) GetPosition() int {
@@ -93,7 +100,6 @@ func ManyN(match Parser, n int) Parser {
 			if !ok {
 				return nil, false
 			}
-			fmt.Printf("%d: %s\n", i, out)
 
 			if out != nil {
 				matched = concat(matched, out)
@@ -104,7 +110,6 @@ func ManyN(match Parser, n int) Parser {
 }
 
 /*
-	TODO: check if this works
 	Matches +
 */
 func Many1(match Parser) Parser {
@@ -140,7 +145,6 @@ func Any(matches ...Parser) Parser {
 			if ok {
 				return out, true
 			}
-			fmt.Printf("Any failed\n")
 		}
 		return nil, false
 	}
@@ -155,7 +159,6 @@ func Try(match Parser) Parser {
 		out, ok := match(in)
 		if !ok {
 			in.SetPosition(initialPosition)
-			fmt.Printf("Try failed\n")
 		}
 		return out, ok
 	}
@@ -200,13 +203,11 @@ func Concat(matches ...Parser) Parser {
 	return func(in State) (Output, bool) {
 		matched := make([]byte, 0)
 		for _, match := range matches {
-			fmt.Printf("Concat start pos.: %d\n", in.GetPosition())
 			out, ok := match(in)
 			if !ok {
 				return matched, false
 			}
 			matched = concat(matched, out)
-			fmt.Printf("Concat: -%s-\n", matched)
 		}
 		return matched, true
 	}
@@ -233,8 +234,7 @@ func Whitespace() Parser {
 */
 func Skip(match Parser) Parser {
 	return func(in State) (Output, bool) {
-		out, ok := match(in)
-		fmt.Printf("Skipping: -%s-\n", out)
+		_, ok := match(in)
 		if ok {
 			in.SetPosition(in.GetPosition() - 1)
 		}
