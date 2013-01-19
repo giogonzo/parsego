@@ -5,6 +5,16 @@ import (
 	"parsego/parser"
 )
 
+const (
+	IDENTIFIER = iota
+	NUMBER_LITERAL
+	STRING_LITERAL
+	BOOL_LITERAL
+	LITERAL
+	ASSIGNMENT
+	EXPRESSION
+)
+
 /*
 	Matches an IDENTIFIER
 */
@@ -83,5 +93,5 @@ func main() {
 	fmt.Printf("-------\n")
 	fmt.Printf("Parse ok: %t\n", ok)
 	fmt.Printf("Last position: %d\n", in.GetPosition())
-	fmt.Printf("Parsed: -%s-\n", out)
+	fmt.Printf("Parsed: -%s-\n", out.Value)
 }

@@ -2,6 +2,7 @@ package pg
 
 import (
 	"fmt"
+	"parsego/parsetree"
 	"regexp"
 )
 
@@ -15,7 +16,7 @@ type State interface {
 
 type Parser func(in State) (Output, bool)
 
-type Output []byte
+type Output *pt.ParseTree
 
 /*
 
@@ -63,9 +64,11 @@ func Character(c int) Parser {
 	return func(in State) (Output, bool) {
 		target, ok := in.Next()
 		if ok && c == int(target) {
-			return []byte{byte(c)}, true
+			node := new(pt.ParseTree)
+			node.Value = []byte{byte(c)}
+			return node, true
 		}
-		return nil, false
+		return new(pt.ParseTree), false
 	}
 }
 
@@ -81,11 +84,13 @@ func Many(match Parser) Parser {
 				break
 			}
 
-			if out != nil {
-				matched = concat(matched, out)
+			if out.Value != nil {
+				matched = concat(matched, out.Value)
 			}
 		}
-		return matched, true
+		node := new(pt.ParseTree)
+		node.Value = matched
+		return node, true
 	}
 }
 
@@ -98,14 +103,16 @@ func ManyN(match Parser, n int) Parser {
 		for i := 0; i < n; i += 1 {
 			out, ok := match(in)
 			if !ok {
-				return nil, false
+				return new(pt.ParseTree), false
 			}
 
-			if out != nil {
-				matched = concat(matched, out)
+			if out.Value != nil {
+				matched = concat(matched, out.Value)
 			}
 		}
-		return matched, true
+		node := new(pt.ParseTree)
+		node.Value = matched
+		return node, true
 	}
 }
 
@@ -116,9 +123,9 @@ func Many1(match Parser) Parser {
 	return func(in State) (Output, bool) {
 		out, ok := match(in)
 		if !ok {
-			return nil, false
+			return new(pt.ParseTree), false
 		}
-		matched := []byte(out)
+		matched := out.Value
 
 		for {
 			out, ok := match(in)
@@ -126,11 +133,13 @@ func Many1(match Parser) Parser {
 				break
 			}
 
-			if out != nil {
-				matched = concat(matched, out)
+			if out.Value != nil {
+				matched = concat(matched, out.Value)
 			}
 		}
-		return matched, true
+		node := new(pt.ParseTree)
+		node.Value = matched
+		return node, true
 	}
 }
 
@@ -146,7 +155,7 @@ func Any(matches ...Parser) Parser {
 				return out, true
 			}
 		}
-		return nil, false
+		return new(pt.ParseTree), false
 	}
 }
 
@@ -173,10 +182,12 @@ func Char() Parser {
 		if ok {
 			match, _ := regexp.Match("[a-zA-Z]", []byte{byte(target)})
 			if match {
-				return []byte{byte(target)}, true
+				node := new(pt.ParseTree)
+				node.Value = []byte{byte(target)}
+				return node, true
 			}
 		}
-		return nil, false
+		return new(pt.ParseTree), false
 	}
 }
 
@@ -189,10 +200,12 @@ func Number() Parser {
 		if ok {
 			match, _ := regexp.Match("[0-9]", []byte{byte(target)})
 			if match {
-				return []byte{byte(target)}, true
+				node := new(pt.ParseTree)
+				node.Value = []byte{byte(target)}
+				return node, true
 			}
 		}
-		return nil, false
+		return new(pt.ParseTree), false
 	}
 }
 
@@ -202,14 +215,17 @@ func Number() Parser {
 func Concat(matches ...Parser) Parser {
 	return func(in State) (Output, bool) {
 		matched := make([]byte, 0)
+		node := new(pt.ParseTree)
 		for _, match := range matches {
 			out, ok := match(in)
 			if !ok {
-				return matched, false
+				node.Value = matched
+				return node, false
 			}
-			matched = concat(matched, out)
+			matched = concat(matched, out.Value)
 		}
-		return matched, true
+		node.Value = matched
+		return node, true
 	}
 }
 
@@ -222,10 +238,12 @@ func Whitespace() Parser {
 		if ok {
 			match, _ := regexp.Match("\\s", []byte{byte(target)})
 			if match {
-				return []byte{byte(target)}, true
+				node := new(pt.ParseTree)
+				node.Value = []byte{byte(target)}
+				return node, true
 			}
 		}
-		return nil, false
+		return new(pt.ParseTree), false
 	}
 }
 
@@ -238,7 +256,7 @@ func Skip(match Parser) Parser {
 		if ok {
 			in.SetPosition(in.GetPosition() - 1)
 		}
-		return nil, ok
+		return new(pt.ParseTree), ok
 	}
 }
 
@@ -281,15 +299,37 @@ func Semi() Parser {
 func String(s string) Parser {
 	return func(in State) (Output, bool) {
 		matched := make([]byte, 0)
+		node := new(pt.ParseTree)
 		for _, c := range s {
 			out, ok := Character(int(c))(in)
 			if !ok {
-				return matched, false
+				node.Value = matched
+				return node, false
 			}
-			matched = append(matched, out[0])
+			matched = append(matched, out.Value[0])
 		}
-		return matched, true
+		node.Value = matched
+		return node, true
 	}
+}
+
+/*
+
+*/
+
+/*
+	Specifies a Node Type
+*/
+func Specify(nodeType int, match Parser) Parser {
+	return func(in State) (Output, bool) {
+		out, ok := match(in)
+		if !ok {
+			return new(pt.ParseTree), false
+		}
+		out.Type = nodeType
+		return out, true
+	}
+
 }
 
 /*
