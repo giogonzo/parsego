@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"parsego/parser"
+	"parsego/parsetree"
 )
 
 const (
-	IDENTIFIER = iota
+	_ = iota
+	IDENTIFIER
 	NUMBER_LITERAL
 	STRING_LITERAL
 	BOOL_LITERAL
@@ -19,28 +21,28 @@ const (
 	Matches an IDENTIFIER
 */
 func Identifier() pg.Parser {
-	return pg.Concat(pg.Char(), pg.Many(pg.Any(pg.Try(pg.Char()), pg.Try(pg.Number()))))
+	return pg.Specify(IDENTIFIER, pg.Concat(pg.Char(), pg.Many(pg.Any(pg.Try(pg.Char()), pg.Try(pg.Number())))))
 }
 
 /*
 	Matches a NUMBER_LITERAL
 */
 func NumberLiteral() pg.Parser {
-	return pg.Many1(pg.Number())
+	return pg.Specify(NUMBER_LITERAL, pg.Many1(pg.Number()))
 }
 
 /*
 	Matches a STRING_LITERAL
 */
 func StringLiteral() pg.Parser {
-	return pg.Concat(pg.Character('"'), pg.Many(pg.Any(pg.Try(pg.Char()), pg.Try(pg.Number()))), pg.Character('"'))
+	return pg.Specify(STRING_LITERAL, pg.Concat(pg.Character('"'), pg.Many(pg.Any(pg.Try(pg.Char()), pg.Try(pg.Number()))), pg.Character('"')))
 }
 
 /*
 	Matches a BOOL_LITERAL
 */
 func BoolLiteral() pg.Parser {
-	return pg.Any(pg.Try(pg.String("true")), pg.Try(pg.String("false")))
+	return pg.Specify(BOOL_LITERAL, pg.Any(pg.Try(pg.String("true")), pg.Try(pg.String("false"))))
 }
 
 /*
@@ -54,7 +56,7 @@ func Literal() pg.Parser {
 	Matches an ASSIGNMENT
 */
 func Assignment() pg.Parser {
-	return pg.Trim(pg.Concat(Identifier(), pg.Whitespaces(), pg.Equal(), pg.Whitespaces(), Expression()))
+	return pg.Specify(ASSIGNMENT, pg.Trim(pg.Concat(Identifier(), pg.Whitespaces(), pg.Equal(), pg.Whitespaces(), Expression())))
 }
 
 /*
@@ -62,7 +64,7 @@ func Assignment() pg.Parser {
 	Matches an EXPRESSION
 */
 func Expression() pg.Parser {
-	return pg.Any(pg.Try(Literal()), pg.Try(Identifier()))
+	return pg.Specify(EXPRESSION, pg.Any(pg.Try(Literal()), pg.Try(Identifier())))
 }
 
 /*
@@ -71,21 +73,9 @@ func Expression() pg.Parser {
 func main() {
 	in := new(pg.StringState)
 
-	// in.SetInput("aabaa")
-	// out, ok := Many(Any(Try(Character('a')), Try(Character('b'))))(in)
-
-	// in.SetInput("bella")
-	// out, ok := Many(Char())(in)
-
-	// in.SetInput("var1")
-	// out, ok := Identifier()(in)
-
-	// in.SetInput("varName =		34")
-	// out, ok := Assignment()(in)
-
 	in.SetInput(`
 		varName = true
-		test=	10
+		test = 10
 		`)
 	fmt.Printf("%s\n", in.GetInput())
 	out, ok := pg.Many(Assignment())(in)
@@ -93,5 +83,11 @@ func main() {
 	fmt.Printf("-------\n")
 	fmt.Printf("Parse ok: %t\n", ok)
 	fmt.Printf("Last position: %d\n", in.GetPosition())
-	fmt.Printf("Parsed: -%s-\n", out.Value)
+	fmt.Print("Parsed:\n")
+	out.Walk(0, func(level int, node *pt.ParseTree) {
+		for i := 0; i < level; i += 1 {
+			fmt.Print(" ")
+		}
+		fmt.Printf("%d: %s\n", node.Type, node.Value)
+	})
 }
