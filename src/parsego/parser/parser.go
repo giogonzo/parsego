@@ -1,7 +1,6 @@
 package pg
 
 import (
-	"fmt"
 	"parsego/parsetree"
 	"regexp"
 )
@@ -31,11 +30,9 @@ type StringState struct {
 
 func (self *StringState) Next() (int, bool) {
 	if self.position >= len(self.input) {
-		fmt.Print("\n")
 		return 0, false
 	}
 	self.position += 1
-	fmt.Printf("%c", self.input[self.position-1])
 	return int(self.input[self.position-1]), true
 }
 
@@ -60,21 +57,6 @@ func (self *StringState) SetPosition(position int) {
 */
 
 /*
-	Matches a single character
-*/
-func Character(c int) Parser {
-	return func(in State) (*pt.ParseTree, bool) {
-		target, ok := in.Next()
-		if ok && c == int(target) {
-			node := new(pt.ParseTree)
-			node.Value = []byte{byte(c)}
-			return node, true
-		}
-		return new(pt.ParseTree), false
-	}
-}
-
-/*
 	Matches *
 */
 func Many(match Parser) Parser {
@@ -86,8 +68,9 @@ func Many(match Parser) Parser {
 				break
 			}
 
-			node = concat(node, out)
+			appendChild(node, out)
 		}
+		flatten(node)
 		return node, true
 	}
 }
@@ -95,20 +78,21 @@ func Many(match Parser) Parser {
 /*
 	Matches {n,n}
 */
-func ManyN(match Parser, n int) Parser {
-	return func(in State) (*pt.ParseTree, bool) {
-		node := new(pt.ParseTree)
-		for i := 0; i < n; i += 1 {
-			out, ok := match(in)
-			if !ok {
-				return new(pt.ParseTree), false
-			}
+// func ManyN(match Parser, n int) Parser {
+// 	return func(in State) (*pt.ParseTree, bool) {
+// 		node := new(pt.ParseTree)
+// 		for i := 0; i < n; i += 1 {
+// 			out, ok := match(in)
+// 			if !ok {
+// 				return nil, false
+// 			}
 
-			node = concat(node, out)
-		}
-		return node, true
-	}
-}
+// 			appendChild(node, out)
+// 		}
+// 		flatten(node)
+// 		return node, true
+// 	}
+// }
 
 /*
 	Matches +
@@ -118,17 +102,18 @@ func Many1(match Parser) Parser {
 		node := new(pt.ParseTree)
 		out, ok := match(in)
 		if !ok {
-			return new(pt.ParseTree), false
+			return nil, false
 		}
-		node = concat(node, out)
+		appendChild(node, out)
 
 		for {
 			out, ok := match(in)
 			if !ok {
 				break
 			}
-			node = concat(node, out)
+			appendChild(node, out)
 		}
+		flatten(node)
 		return node, true
 	}
 }
@@ -145,7 +130,25 @@ func Any(matches ...Parser) Parser {
 				return out, true
 			}
 		}
-		return new(pt.ParseTree), false
+		return nil, false
+	}
+}
+
+/*
+	Matches concatenation
+*/
+func Concat(matches ...Parser) Parser {
+	return func(in State) (*pt.ParseTree, bool) {
+		node := new(pt.ParseTree)
+		for _, match := range matches {
+			out, ok := match(in)
+			if !ok {
+				return nil, false
+			}
+			appendChild(node, out)
+		}
+		flatten(node)
+		return node, true
 	}
 }
 
@@ -164,6 +167,21 @@ func Try(match Parser) Parser {
 }
 
 /*
+	Matches a single character
+*/
+func Character(c int) Parser {
+	return func(in State) (*pt.ParseTree, bool) {
+		target, ok := in.Next()
+		if ok && c == int(target) {
+			node := new(pt.ParseTree)
+			node.Value = []byte{byte(c)}
+			return node, true
+		}
+		return nil, false
+	}
+}
+
+/*
 	Matches [a-zA-Z]
 */
 func Char() Parser {
@@ -177,7 +195,7 @@ func Char() Parser {
 				return node, true
 			}
 		}
-		return new(pt.ParseTree), false
+		return nil, false
 	}
 }
 
@@ -195,24 +213,7 @@ func Number() Parser {
 				return node, true
 			}
 		}
-		return new(pt.ParseTree), false
-	}
-}
-
-/*
-	Matches concatenation
-*/
-func Concat(matches ...Parser) Parser {
-	return func(in State) (*pt.ParseTree, bool) {
-		node := new(pt.ParseTree)
-		for _, match := range matches {
-			out, ok := match(in)
-			if !ok {
-				return node, false
-			}
-			node = concat(node, out)
-		}
-		return node, true
+		return nil, false
 	}
 }
 
@@ -230,7 +231,7 @@ func Whitespace() Parser {
 				return node, true
 			}
 		}
-		return new(pt.ParseTree), false
+		return nil, false
 	}
 }
 
@@ -243,7 +244,7 @@ func Skip(match Parser) Parser {
 		if ok {
 			in.SetPosition(in.GetPosition() - 1)
 		}
-		return new(pt.ParseTree), ok
+		return nil, ok
 	}
 }
 
@@ -311,7 +312,7 @@ func Specify(nodeType int, match Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
 		out, ok := match(in)
 		if !ok {
-			return new(pt.ParseTree), false
+			return nil, false
 		}
 		out.Type = nodeType
 		return out, true
@@ -330,25 +331,30 @@ func concatBytes(old1, old2 []byte) []byte {
 	return newslice
 }
 
-func concat(o1, o2 *pt.ParseTree) *pt.ParseTree {
-	if o1.Type == TYPE_UNDEFINED && o2.Type == TYPE_UNDEFINED {
-		// concat values
-		fmt.Print("\n->concat values\n")
-		o1.Value = concatBytes(o1.Value, o2.Value)
-		return o1
-	} else if o1.Type == TYPE_UNDEFINED && o2.Type != TYPE_UNDEFINED {
-		// append children and return parent
-		fmt.Print("\n->append children\n")
-		parent := new(pt.ParseTree)
-		parent.Children = []*pt.ParseTree{o1, o2}
-		return parent
+func appendChild(parent, child *pt.ParseTree) {
+	if child == nil {
+		return
 	}
+	if child.Type == TYPE_UNDEFINED && parent.Children != nil {
+		last := parent.Children[len(parent.Children)-1]
+		if last.Type == TYPE_UNDEFINED {
+			// concat values
+			last.Value = concatBytes(last.Value, child.Value)
+			return
+		}
+	}
+	// append as new child
+	parent.Children = append(parent.Children, child)
+}
 
-	// else append new child
-	fmt.Print("\n->append new child\n")
-	if o1.Children == nil {
-		o1.Children = []*pt.ParseTree{}
+func flatten(node *pt.ParseTree) {
+	concat := []byte{}
+	for _, child := range node.Children {
+		if child.Type != TYPE_UNDEFINED {
+			return
+		}
+		concat = concatBytes(concat, child.Value)
 	}
-	o1.Children = append(o1.Children, o2)
-	return o1
+	node.Children = []*pt.ParseTree{}
+	node.Value = concat
 }
