@@ -76,25 +76,6 @@ func Many(match Parser) Parser {
 }
 
 /*
-	Matches {n,n}
-*/
-// func ManyN(match Parser, n int) Parser {
-// 	return func(in State) (*pt.ParseTree, bool) {
-// 		node := new(pt.ParseTree)
-// 		for i := 0; i < n; i += 1 {
-// 			out, ok := match(in)
-// 			if !ok {
-// 				return nil, false
-// 			}
-
-// 			appendChild(node, out)
-// 		}
-// 		flatten(node)
-// 		return node, true
-// 	}
-// }
-
-/*
 	Matches +
 */
 func Many1(match Parser) Parser {
@@ -241,9 +222,6 @@ func Whitespace() Parser {
 func Skip(match Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
 		_, ok := match(in)
-		if ok {
-			in.SetPosition(in.GetPosition() - 1)
-		}
 		return nil, ok
 	}
 }
@@ -252,7 +230,7 @@ func Skip(match Parser) Parser {
 	Skips whitespace(s)
 */
 func Whitespaces() Parser {
-	return Skip(Many(Whitespace()))
+	return Skip(Many(Try(Whitespace())))
 }
 
 /*
@@ -264,6 +242,26 @@ func Trim(match Parser) Parser {
 		out, ok := match(in)
 		Whitespaces()(in)
 		return out, ok
+	}
+}
+
+/*
+	Matches between parens
+*/
+func Parens(match Parser) Parser {
+	return func(in State) (*pt.ParseTree, bool) {
+		_, okl := Character('(')(in)
+		if !okl {
+			return nil, false
+		}
+		Whitespaces()(in)
+		out, okm := match(in)
+		Whitespaces()(in)
+		_, okr := Character(')')(in)
+		if !okr {
+			return nil, false
+		}
+		return out, okm
 	}
 }
 
