@@ -33,7 +33,6 @@ func (self *StringState) Next() (int, bool) {
 		return 0, false
 	}
 	self.position += 1
-	// fmt.Printf("Next: -%c-\n", int(self.input[self.position-1]))
 	return int(self.input[self.position-1]), true
 }
 
@@ -288,8 +287,8 @@ func Between(left, match, right Parser) Parser {
 func Parens(match Parser) Parser {
 	return Between(
 		Concat(
-			Whitespaces(),
-			Character('(')),
+			Character('('),
+			Whitespaces()),
 		match,
 		Concat(
 			Whitespaces(),
@@ -394,9 +393,9 @@ func appendChild(parent, child *pt.ParseTree) {
 }
 
 func flatten(node *pt.ParseTree) {
-	// if node.Type != TYPE_UNDEFINED {
-	// 	return
-	// }
+	if node.Type != TYPE_UNDEFINED {
+		return
+	}
 	concat := []byte{}
 	for _, child := range node.Children {
 		if child.Type != TYPE_UNDEFINED {
