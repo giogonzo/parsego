@@ -33,6 +33,7 @@ func (self *StringState) Next() (int, bool) {
 		return 0, false
 	}
 	self.position += 1
+	// fmt.Printf("Next: -%c-\n", int(self.input[self.position-1]))
 	return int(self.input[self.position-1]), true
 }
 
@@ -100,10 +101,14 @@ func Many1(match Parser) Parser {
 }
 
 /*
-	Matches parsers in |
+	Matches disjunction
 	Wrap parsers in Try(...) calls to preserve state
 */
 func Any(matches ...Parser) Parser {
+	return any(matches)
+}
+
+func any(matches []Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
 		for _, match := range matches {
 			out, ok := match(in)
@@ -113,6 +118,17 @@ func Any(matches ...Parser) Parser {
 		}
 		return nil, false
 	}
+}
+
+/*
+	Matches disjunction,
+	preserving state in case of failure
+*/
+func TryAny(matches ...Parser) Parser {
+	for i, match := range matches {
+		matches[i] = Try(match)
+	}
+	return any(matches)
 }
 
 /*
@@ -246,23 +262,38 @@ func Trim(match Parser) Parser {
 }
 
 /*
-	Matches between parens
+	Matches between two parsers
 */
-func Parens(match Parser) Parser {
+func Between(left, match, right Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
-		_, okl := Character('(')(in)
+		_, okl := left(in)
 		if !okl {
 			return nil, false
 		}
-		Whitespaces()(in)
-		out, okm := match(in)
-		Whitespaces()(in)
-		_, okr := Character(')')(in)
+
+		out, ok := match(in)
+
+		_, okr := right(in)
 		if !okr {
 			return nil, false
 		}
-		return out, okm
+
+		return out, ok
 	}
+}
+
+/*
+	Matches between parens, skipping internal whitespaces
+*/
+func Parens(match Parser) Parser {
+	return Between(
+		Concat(
+			Whitespaces(),
+			Character('(')),
+		match,
+		Concat(
+			Whitespaces(),
+			Character(')')))
 }
 
 /*
@@ -315,7 +346,15 @@ func Specify(nodeType int, match Parser) Parser {
 		out.Type = nodeType
 		return out, true
 	}
+}
 
+/*
+	Helper for recursive rules
+*/
+func Recursive(match func() Parser) Parser {
+	return func(in State) (*pt.ParseTree, bool) {
+		return match()(in)
+	}
 }
 
 /*
@@ -339,13 +378,25 @@ func appendChild(parent, child *pt.ParseTree) {
 			// concat values
 			last.Value = concatBytes(last.Value, child.Value)
 			return
+		} else {
+			for _, c := range child.Children {
+				if len(c.Value) > 0 || c.Type != TYPE_UNDEFINED {
+					appendChild(parent, c)
+				}
+			}
+			child.Children = []*pt.ParseTree{}
 		}
 	}
 	// append as new child
-	parent.Children = append(parent.Children, child)
+	if len(child.Value) > 0 || child.Type != TYPE_UNDEFINED {
+		parent.Children = append(parent.Children, child)
+	}
 }
 
 func flatten(node *pt.ParseTree) {
+	// if node.Type != TYPE_UNDEFINED {
+	// 	return
+	// }
 	concat := []byte{}
 	for _, child := range node.Children {
 		if child.Type != TYPE_UNDEFINED {
