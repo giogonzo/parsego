@@ -287,11 +287,13 @@ func Between(left, match, right Parser) Parser {
 func Parens(match Parser) Parser {
 	return Between(
 		Concat(
-			Character('('),
+			Skip(
+				Character('(')),
 			Whitespaces()),
 		match,
 		Concat(
-			Whitespaces(),
+			Skip(
+				Whitespaces()),
 			Character(')')))
 }
 
