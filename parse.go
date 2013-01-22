@@ -18,6 +18,8 @@ const (
 	SUM
 	PRODUCT
 	VALUE
+	FOREACH
+	BLOCK
 )
 
 var NODE_TYPES = map[int]string{
@@ -27,12 +29,11 @@ var NODE_TYPES = map[int]string{
 	NUMBER_LITERAL: "|NUMBER_LITERAL",
 	STRING_LITERAL: "|STRING_LITERAL",
 	BOOL_LITERAL:   "|BOOL_LITERAL",
-	LITERAL:        "|LITERAL",
 	ASSIGNMENT:     "|ASSIGNMENT",
-	EXPRESSION:     "|EXPRESSION",
 	SUM:            "|SUM",
 	PRODUCT:        "|PRODUCT",
-	VALUE:          "|VALUE",
+	FOREACH:        "|FOREACH",
+	BLOCK:          "|BLOCK",
 }
 
 /*
@@ -103,7 +104,8 @@ func Assignment() pg.Parser {
 			pg.Concat(
 				Identifier(),
 				pg.Whitespaces(),
-				pg.Equal(),
+				pg.Skip(
+					pg.Equal()),
 				pg.Whitespaces(),
 				Expression())))
 }
@@ -113,47 +115,48 @@ func Assignment() pg.Parser {
 	Expr ← Sum
 */
 func Expression() pg.Parser {
-	return pg.Specify(EXPRESSION,
-		pg.Trim(
-			Sum()))
+	return pg.Trim(
+		Sum())
 }
 
 /*
 	Sum ← Product ('+' | '-') Product | Product
 */
 func Sum() pg.Parser {
-	return pg.Specify(SUM,
-		pg.TryAny(
+	return pg.TryAny(
+		pg.Specify(SUM,
 			pg.Concat(
 				Product(),
 				pg.Trim(
 					pg.Concat(
-						SumOperator(),
+						pg.Skip(
+							SumOperator()),
 						pg.Whitespaces(),
-						Product()))),
-			pg.Trim(
-				Product())))
+						Product())))),
+		pg.Trim(
+			Product()))
 }
 
 /*
 	Product ← Value ('*' | '/') Value | Value
 */
 func Product() pg.Parser {
-	return pg.Specify(PRODUCT,
-		pg.TryAny(
+	return pg.TryAny(
+		pg.Specify(PRODUCT,
 			pg.Concat(
 				Value(),
 				pg.Trim(
 					pg.Concat(
-						ProductOperator(),
+						pg.Skip(
+							ProductOperator()),
 						pg.Whitespaces(),
-						Value()))),
-			pg.Trim(
-				Value())))
+						Value())))),
+		pg.Trim(
+			Value()))
 }
 
 /*
-	Value   ← Identifier | Literal | '(' Expr ')'
+	Value   ← '(' Expr ')' | Identifier | Literal
 */
 func Value() pg.Parser {
 	return pg.TryAny(
@@ -176,22 +179,79 @@ func ProductOperator() pg.Parser {
 		pg.Character('/'))
 }
 
+func Statement() pg.Parser {
+	return pg.Trim(
+		pg.TryAny(
+			pg.Recursive(ControlStatement),
+			Assignment()))
+}
+
+/*
+	TODO
+*/
+func ControlStatement() pg.Parser {
+	return pg.TryAny(
+		Loop())
+}
+
+/*
+	TODO
+*/
+func Loop() pg.Parser {
+	return pg.TryAny(
+		Foreach())
+}
+
+/*
+	TODO
+*/
+func Foreach() pg.Parser {
+	return pg.Specify(FOREACH,
+		pg.Concat(
+			pg.Skip(
+				pg.String("for")),
+			pg.Whitespaces(),
+			Identifier(),
+			pg.Whitespaces(),
+			pg.Skip(
+				pg.String("in")),
+			pg.Whitespaces(),
+			Identifier(),
+			pg.Whitespaces(),
+			Block()))
+}
+
+func Block() pg.Parser {
+	return pg.Specify(BLOCK,
+		pg.Trim(
+			pg.Between(
+				pg.Character('{'),
+				pg.Many(Statement()),
+				pg.Character('}'))))
+}
+
 /*
 
 */
 func main() {
 	in := new(pg.StringState)
 	in.SetInput(`
-		test = 0 + (1 + 2 * 3) * 4
+		for man in men {
+			test = 0 + (1 + 2 * 3) * 4
+			varName = men
+			for person in people {
+				test = false
+			}
+		}
 		`)
-	out, ok := pg.Many(Assignment())(in)
+	out, ok := Statement()(in)
 
 	fmt.Printf("Parse ok: %t\n", ok)
 	fmt.Printf("Left: %d\n", len(in.GetInput())-in.GetPosition())
 	fmt.Print("Parsed:\n")
 	out.Walk(0, func(level int, node *pt.ParseTree) {
 		for i := 0; i < level; i += 1 {
-			fmt.Print("  ")
+			fmt.Print("   ")
 		}
 		fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
 	})
