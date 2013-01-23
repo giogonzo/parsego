@@ -11,6 +11,7 @@ type State interface {
 	GetInput() string
 	GetPosition() int
 	SetPosition(position int)
+	GetProbeCount() int
 }
 
 type Parser func(in State) (*pt.ParseTree, bool)
@@ -24,8 +25,9 @@ const (
 */
 
 type ParseState struct {
-	position int
-	input    []byte
+	position   int
+	input      []byte
+	probeCount int
 }
 
 func (self *ParseState) Next() (int, bool) {
@@ -33,6 +35,7 @@ func (self *ParseState) Next() (int, bool) {
 		return 0, false
 	}
 	self.position += 1
+	self.probeCount += 1
 	return int(self.input[self.position-1]), true
 }
 
@@ -50,6 +53,10 @@ func (self *ParseState) GetPosition() int {
 
 func (self *ParseState) SetPosition(position int) {
 	self.position = position
+}
+
+func (self *ParseState) GetProbeCount() int {
+	return self.probeCount
 }
 
 /*

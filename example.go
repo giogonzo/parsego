@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"parsego/parser"
 	"parsego/parsetree"
+	"time"
 )
 
 const (
@@ -576,8 +577,11 @@ func main() {
 			}
 		}
 	`)
+	start := time.Now()
 	out, ok := pg.Many(Statement())(in)
+	end := time.Now()
 
+	fmt.Printf("Input length: %d, probe count: %d, total: %s\n", len(in.GetInput()), in.GetProbeCount(), end.Sub(start).String())
 	fmt.Printf("Parse ok: %t\n", ok)
 	fmt.Printf("Left: %d\n", len(in.GetInput())-in.GetPosition())
 	fmt.Print("Parsed:\n")
