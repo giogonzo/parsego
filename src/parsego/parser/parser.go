@@ -343,6 +343,15 @@ func String(s string) Parser {
 }
 
 /*
+	Matches emptiness
+*/
+func Empty() Parser {
+	return func(in State) (*pt.ParseTree, bool) {
+		return nil, true
+	}
+}
+
+/*
 
 */
 
