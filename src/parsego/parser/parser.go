@@ -23,12 +23,12 @@ const (
 
 */
 
-type StringState struct {
+type ParseState struct {
 	position int
 	input    []byte
 }
 
-func (self *StringState) Next() (int, bool) {
+func (self *ParseState) Next() (int, bool) {
 	if self.position >= len(self.input) {
 		return 0, false
 	}
@@ -36,19 +36,19 @@ func (self *StringState) Next() (int, bool) {
 	return int(self.input[self.position-1]), true
 }
 
-func (self *StringState) SetInput(in string) {
+func (self *ParseState) SetInput(in string) {
 	self.input = []byte(in)
 }
 
-func (self *StringState) GetInput() string {
+func (self *ParseState) GetInput() string {
 	return string(self.input)
 }
 
-func (self *StringState) GetPosition() int {
+func (self *ParseState) GetPosition() int {
 	return self.position
 }
 
-func (self *StringState) SetPosition(position int) {
+func (self *ParseState) SetPosition(position int) {
 	self.position = position
 }
 
@@ -354,6 +354,9 @@ func Specify(nodeType int, match Parser) Parser {
 		out, ok := match(in)
 		if !ok {
 			return nil, false
+		}
+		if out == nil {
+			out = new(pt.ParseTree)
 		}
 		out.Type = nodeType
 		return out, true
