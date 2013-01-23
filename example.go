@@ -530,6 +530,7 @@ func FunctionDefinition() pg.Parser {
 			pg.Parens(
 				NamedParamsList()),
 			pg.Whitespaces(),
+			// return type
 			pg.Recursive(Block)))
 }
 
@@ -547,7 +548,7 @@ func NamedParamsList() pg.Parser {
 				pg.Whitespaces(),
 				pg.SkipChar(','),
 				pg.Whitespaces(),
-				pg.Recursive(ParamsList)),
+				pg.Recursive(NamedParamsList)),
 			Identifier(),
 			pg.Empty()))
 }
