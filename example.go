@@ -21,21 +21,43 @@ const (
 	FOREACH
 	FOR
 	BLOCK
+	IFTHEN
+	IFTHENELSE
+	L_COMPARISON
+	L_E_COMPARISON
+	G_COMPARISON
+	G_E_COMPARISON
+	E_COMPARISON
+	BREAK
+	CONTINUE
+	OR_EXPRESSION
+	AND_EXPRESSION
 )
 
 var NODE_TYPES = map[int]string{
-	TYPE_UNDEFINED: "|",
+	TYPE_UNDEFINED: "?",
 
-	IDENTIFIER:     "|IDENTIFIER",
-	NUMBER_LITERAL: "|NUMBER_LITERAL",
-	STRING_LITERAL: "|STRING_LITERAL",
-	BOOL_LITERAL:   "|BOOL_LITERAL",
-	ASSIGNMENT:     "|ASSIGNMENT",
-	SUM:            "|SUM",
-	PRODUCT:        "|PRODUCT",
-	FOREACH:        "|FOREACH",
-	FOR:            "|FOR",
-	BLOCK:          "|BLOCK",
+	IDENTIFIER:     "IDENTIFIER",
+	NUMBER_LITERAL: "NUMBER_LITERAL",
+	STRING_LITERAL: "STRING_LITERAL",
+	BOOL_LITERAL:   "BOOL_LITERAL",
+	ASSIGNMENT:     "ASSIGNMENT",
+	SUM:            "SUM",
+	PRODUCT:        "PRODUCT",
+	FOREACH:        "FOREACH",
+	FOR:            "FOR",
+	BLOCK:          "BLOCK",
+	IFTHEN:         "IFTHEN",
+	IFTHENELSE:     "IFTHENELSE",
+	L_COMPARISON:   "L_COMPARISON",
+	L_E_COMPARISON: "L_E_COMPARISON",
+	G_COMPARISON:   "G_COMPARISON",
+	G_E_COMPARISON: "G_E_COMPARISON",
+	E_COMPARISON:   "E_COMPARISON",
+	BREAK:          "BREAK",
+	CONTINUE:       "CONTINUE",
+	OR_EXPRESSION:  "OR_EXPRESSION",
+	AND_EXPRESSION: "AND_EXPRESSION",
 }
 
 /*
@@ -57,8 +79,7 @@ func Identifier() pg.Parser {
 func NumberLiteral() pg.Parser {
 	return pg.Specify(NUMBER_LITERAL,
 		pg.Many1(
-			pg.Try(
-				pg.Number())))
+			pg.Number()))
 }
 
 /*
@@ -110,11 +131,139 @@ func Assignment() pg.Parser {
 }
 
 /*
-	Expr ← Sum
+	Expr ← Comparison
 */
 func Expression() pg.Parser {
 	return pg.Trim(
+		BoolExpression())
+}
+
+/*
+	BoolExpression ←
+		  OrExpression
+		| AndExpression
+		| Comparison
+*/
+func BoolExpression() pg.Parser {
+	return pg.TryAny(
+		OrExpression(),
+		AndExpression(),
+		Comparison())
+}
+
+/*
+	OrExpression ← 
+*/
+func OrExpression() pg.Parser {
+	return pg.Specify(OR_EXPRESSION,
+		pg.Concat(
+			Comparison(),
+			pg.Whitespaces(),
+			pg.Skip(
+				pg.String("||")),
+			pg.Whitespaces(),
+			Comparison()))
+}
+
+/*
+	AndExpression ← 
+*/
+func AndExpression() pg.Parser {
+	return pg.Specify(AND_EXPRESSION,
+		pg.Concat(
+			Comparison(),
+			pg.Whitespaces(),
+			pg.Skip(
+				pg.String("&&")),
+			pg.Whitespaces(),
+			Comparison()))
+}
+
+/*
+	Comparison ← 
+		  LComparison
+		| LEComparison
+		| GComparison
+		| GEComparison
+		| EComparison
+		| Sum
+*/
+func Comparison() pg.Parser {
+	return pg.TryAny(
+		LComparison(),
+		LEComparison(),
+		GComparison(),
+		GEComparison(),
+		EComparison(),
 		Sum())
+}
+
+/*
+	LComparison  ←  Sum '<' Sum
+*/
+func LComparison() pg.Parser {
+	return pg.Specify(L_COMPARISON,
+		pg.Concat(
+			Sum(),
+			pg.Whitespaces(),
+			pg.SkipChar('<'),
+			pg.Whitespaces(),
+			Sum()))
+}
+
+/*
+	LEComparison  ←  Sum '<=' Sum
+*/
+func LEComparison() pg.Parser {
+	return pg.Specify(L_E_COMPARISON,
+		pg.Concat(
+			Sum(),
+			pg.Whitespaces(),
+			pg.Skip(
+				pg.String("<=")),
+			pg.Whitespaces(),
+			Sum()))
+}
+
+/*
+	GComparison  ←  Sum '>' Sum
+*/
+func GComparison() pg.Parser {
+	return pg.Specify(G_COMPARISON,
+		pg.Concat(
+			Sum(),
+			pg.Whitespaces(),
+			pg.SkipChar('>'),
+			pg.Whitespaces(),
+			Sum()))
+}
+
+/*
+	GEComparison  ←  Sum '>=' Sum
+*/
+func GEComparison() pg.Parser {
+	return pg.Specify(G_E_COMPARISON,
+		pg.Concat(
+			Sum(),
+			pg.Whitespaces(),
+			pg.Skip(
+				pg.String(">=")),
+			pg.Whitespaces(),
+			Sum()))
+}
+
+/*
+	EComparison  ←  Sum '==' Sum
+*/
+func EComparison() pg.Parser {
+	return pg.Specify(E_COMPARISON,
+		pg.Concat(
+			Sum(),
+			pg.Whitespaces(),
+			pg.Skip(
+				pg.String("==")),
+			pg.Whitespaces(),
+			Sum()))
 }
 
 /*
@@ -188,11 +337,14 @@ func Statement() pg.Parser {
 }
 
 /*
-	ControlStatement  ←  Loop
+	ControlStatement  ←  Loop | If | Break | Continue
 */
 func ControlStatement() pg.Parser {
 	return pg.TryAny(
-		Loop())
+		Loop(),
+		If(),
+		Break(),
+		Continue())
 }
 
 /*
@@ -224,6 +376,7 @@ func Foreach() pg.Parser {
 }
 
 /*
+	TODO
 	For  ←  'for' '(' Assignment* ';' Expression ';'
 		Assignment* ')' Block
 */
@@ -233,21 +386,80 @@ func For() pg.Parser {
 			pg.Skip(
 				pg.String("for")),
 			pg.Whitespaces(),
-			pg.Parens(
-				pg.Concat(
-					pg.Many(
-						Assignment()),
-					pg.Whitespaces(),
-					pg.SkipChar(';'),
-					pg.Whitespaces(),
-					Expression(),
-					pg.Whitespaces(),
-					pg.SkipChar(';'),
-					pg.Whitespaces(),
-					pg.Many(
-						Assignment()))),
+			//pg.Many(
+			Assignment(), //),
+			pg.Whitespaces(),
+			pg.SkipChar(';'),
+			pg.Whitespaces(),
+			Expression(),
+			pg.Whitespaces(),
+			pg.SkipChar(';'),
+			pg.Whitespaces(),
+			//pg.Many(
+			Assignment(), //),
 			pg.Whitespaces(),
 			Block()))
+}
+
+/*
+	If  ←  IfThen | IfThenElse
+*/
+func If() pg.Parser {
+	return pg.TryAny(
+		IfThenElse(),
+		IfThen())
+}
+
+/*
+	IfThen  ←  'if' Expression Block
+*/
+func IfThen() pg.Parser {
+	return pg.Specify(IFTHEN,
+		pg.Concat(
+			pg.Skip(
+				pg.String("if")),
+			pg.Whitespaces(),
+			Expression(),
+			pg.Whitespaces(),
+			Block()))
+}
+
+/*
+	IfThenElse  ←  'if' Expression Block
+		'else' Block
+*/
+func IfThenElse() pg.Parser {
+	return pg.Specify(IFTHENELSE,
+		pg.Concat(
+			pg.Skip(
+				pg.String("if")),
+			pg.Whitespaces(),
+			Expression(),
+			pg.Whitespaces(),
+			Block(),
+			pg.Whitespaces(),
+			pg.Skip(
+				pg.String("else")),
+			pg.Whitespaces(),
+			Block()))
+}
+
+/*
+	Break  ←  'break'
+*/
+func Break() pg.Parser {
+	return pg.Specify(BREAK,
+		pg.Skip(
+			pg.String("break")))
+}
+
+/*
+	Continue  ←  'continue'
+*/
+func Continue() pg.Parser {
+	return pg.Specify(CONTINUE,
+		pg.Skip(
+			pg.String("continue")))
 }
 
 /*
@@ -266,14 +478,22 @@ func Block() pg.Parser {
 
 */
 func main() {
-	in := new(pg.StringState)
+	in := new(pg.ParseState)
 	in.SetInput(`
-		test = true
-		for ( i = 0; test; i = i + 1 ) {
-			test = i + (1 + 2 * 3) * 4
-			varName = men
+		if test == false {
+			test = true
+		}
+		for i = 0; test; i = i + 1 {
+			test = test || i + (1 + 2 * 3) * 4 >= 20
+			varName = man
 			for person in people {
-				test = false
+				if test {
+					test = false
+					continue
+				} else {
+					test = true
+					break
+				}
 			}
 		}
 		`)
@@ -284,7 +504,7 @@ func main() {
 	fmt.Print("Parsed:\n")
 	out.Walk(0, func(level int, node *pt.ParseTree) {
 		for i := 0; i < level; i += 1 {
-			fmt.Print("   ")
+			fmt.Print("|  ")
 		}
 		fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
 	})
