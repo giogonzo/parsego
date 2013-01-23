@@ -32,32 +32,36 @@ const (
 	CONTINUE
 	OR_EXPRESSION
 	AND_EXPRESSION
+	FUNCTION_CALL
+	FUNCTION_DEFINITION
 )
 
 var NODE_TYPES = map[int]string{
 	TYPE_UNDEFINED: "?",
 
-	IDENTIFIER:     "IDENTIFIER",
-	NUMBER_LITERAL: "NUMBER_LITERAL",
-	STRING_LITERAL: "STRING_LITERAL",
-	BOOL_LITERAL:   "BOOL_LITERAL",
-	ASSIGNMENT:     "ASSIGNMENT",
-	SUM:            "SUM",
-	PRODUCT:        "PRODUCT",
-	FOREACH:        "FOREACH",
-	FOR:            "FOR",
-	BLOCK:          "BLOCK",
-	IFTHEN:         "IFTHEN",
-	IFTHENELSE:     "IFTHENELSE",
-	L_COMPARISON:   "L_COMPARISON",
-	L_E_COMPARISON: "L_E_COMPARISON",
-	G_COMPARISON:   "G_COMPARISON",
-	G_E_COMPARISON: "G_E_COMPARISON",
-	E_COMPARISON:   "E_COMPARISON",
-	BREAK:          "BREAK",
-	CONTINUE:       "CONTINUE",
-	OR_EXPRESSION:  "OR_EXPRESSION",
-	AND_EXPRESSION: "AND_EXPRESSION",
+	IDENTIFIER:          "IDENTIFIER",
+	NUMBER_LITERAL:      "NUMBER_LITERAL",
+	STRING_LITERAL:      "STRING_LITERAL",
+	BOOL_LITERAL:        "BOOL_LITERAL",
+	ASSIGNMENT:          "ASSIGNMENT",
+	SUM:                 "SUM",
+	PRODUCT:             "PRODUCT",
+	FOREACH:             "FOREACH",
+	FOR:                 "FOR",
+	BLOCK:               "BLOCK",
+	IFTHEN:              "IFTHEN",
+	IFTHENELSE:          "IFTHENELSE",
+	L_COMPARISON:        "L_COMPARISON",
+	L_E_COMPARISON:      "L_E_COMPARISON",
+	G_COMPARISON:        "G_COMPARISON",
+	G_E_COMPARISON:      "G_E_COMPARISON",
+	E_COMPARISON:        "E_COMPARISON",
+	BREAK:               "BREAK",
+	CONTINUE:            "CONTINUE",
+	OR_EXPRESSION:       "OR_EXPRESSION",
+	AND_EXPRESSION:      "AND_EXPRESSION",
+	FUNCTION_CALL:       "FUNCTION_CALL",
+	FUNCTION_DEFINITION: "FUNCTION_DEFINITION",
 }
 
 /*
@@ -307,11 +311,12 @@ func Product() pg.Parser {
 */
 func Value() pg.Parser {
 	return pg.TryAny(
+		FunctionCall(),
+		Identifier(),
+		Literal(),
 		pg.Parens(
 			pg.Recursive(
-				Expression)),
-		Identifier(),
-		Literal())
+				Expression)))
 }
 
 func SumOperator() pg.Parser {
@@ -327,11 +332,15 @@ func ProductOperator() pg.Parser {
 }
 
 /*
-	Statement  ←  ControlStatement | Assignment
+	Statement  ←
+		  FunctionDefinition
+		| ControlStatement
+		| Assignment
 */
 func Statement() pg.Parser {
 	return pg.Trim(
 		pg.TryAny(
+			FunctionDefinition(),
 			pg.Recursive(ControlStatement),
 			Assignment()))
 }
@@ -470,8 +479,76 @@ func Block() pg.Parser {
 		pg.Trim(
 			pg.Between(
 				pg.Character('{'),
-				pg.Many(Statement()),
+				pg.Trim(
+					pg.Many(
+						Statement())),
 				pg.Character('}'))))
+}
+
+/*
+	FunctionCall  ←  Identifier '(' ParamsList ')'
+*/
+func FunctionCall() pg.Parser {
+	return pg.Specify(FUNCTION_CALL,
+		pg.Concat(
+			Identifier(),
+			pg.Parens(
+				ParamsList())))
+}
+
+/*
+	ParamsList  ←
+		  Expression ',' ParamsList
+		| Expression
+		| 'empty'
+*/
+func ParamsList() pg.Parser {
+	return pg.Trim(
+		pg.TryAny(
+			pg.Concat(
+				pg.Recursive(Expression),
+				pg.Whitespaces(),
+				pg.SkipChar(','),
+				pg.Whitespaces(),
+				pg.Recursive(ParamsList)),
+			pg.Recursive(Expression),
+			pg.Empty()))
+}
+
+/*
+	FunctionDefinition  ←
+		Identifier '(' NamedParamsList ')' Block
+*/
+func FunctionDefinition() pg.Parser {
+	return pg.Specify(FUNCTION_DEFINITION,
+		pg.Concat(
+			pg.Skip(
+				pg.String("func")),
+			pg.Whitespaces(),
+			Identifier(),
+			pg.Parens(
+				NamedParamsList()),
+			pg.Whitespaces(),
+			pg.Recursive(Block)))
+}
+
+/*
+	NamedParamsList  ←
+		  Identifier ',' NamedParamsList
+		| Identifier
+		| 'empty'
+*/
+func NamedParamsList() pg.Parser {
+	return pg.Trim(
+		pg.TryAny(
+			pg.Concat(
+				Identifier(),
+				pg.Whitespaces(),
+				pg.SkipChar(','),
+				pg.Whitespaces(),
+				pg.Recursive(ParamsList)),
+			Identifier(),
+			pg.Empty()))
 }
 
 /*
@@ -480,8 +557,10 @@ func Block() pg.Parser {
 func main() {
 	in := new(pg.ParseState)
 	in.SetInput(`
+		func callMe() {
+		}
 		if test == false {
-			test = true
+			test = callMe()
 		}
 		for i = 0; test; i = i + 1 {
 			test = test || i + (1 + 2 * 3) * 4 >= 20
@@ -496,7 +575,7 @@ func main() {
 				}
 			}
 		}
-		`)
+	`)
 	out, ok := pg.Many(Statement())(in)
 
 	fmt.Printf("Parse ok: %t\n", ok)
