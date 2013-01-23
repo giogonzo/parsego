@@ -19,6 +19,7 @@ const (
 	PRODUCT
 	VALUE
 	FOREACH
+	FOR
 	BLOCK
 )
 
@@ -33,11 +34,12 @@ var NODE_TYPES = map[int]string{
 	SUM:            "|SUM",
 	PRODUCT:        "|PRODUCT",
 	FOREACH:        "|FOREACH",
+	FOR:            "|FOR",
 	BLOCK:          "|BLOCK",
 }
 
 /*
-	Matches an IDENTIFIER
+	Identifier  ←  [a-zA-Z][a-zA-Z0-9]*
 */
 func Identifier() pg.Parser {
 	return pg.Specify(IDENTIFIER,
@@ -50,7 +52,7 @@ func Identifier() pg.Parser {
 }
 
 /*
-	Matches a NUMBER_LITERAL
+	NumberLiteral  ←  [0-9]+
 */
 func NumberLiteral() pg.Parser {
 	return pg.Specify(NUMBER_LITERAL,
@@ -60,7 +62,7 @@ func NumberLiteral() pg.Parser {
 }
 
 /*
-	Matches a STRING_LITERAL
+	StringLiteral  ←  '"' [a-zA-Z0-9]* '"'
 */
 func StringLiteral() pg.Parser {
 	return pg.Specify(STRING_LITERAL,
@@ -76,7 +78,7 @@ func StringLiteral() pg.Parser {
 }
 
 /*
-	Matches a BOOL_LITERAL
+	BoolLiteral  ←  'true' | 'false'
 */
 func BoolLiteral() pg.Parser {
 	return pg.Specify(BOOL_LITERAL,
@@ -85,9 +87,6 @@ func BoolLiteral() pg.Parser {
 			pg.String("false")))
 }
 
-/*
-	Matches a LITERAL
-*/
 func Literal() pg.Parser {
 	return pg.TryAny(
 		NumberLiteral(),
@@ -96,7 +95,7 @@ func Literal() pg.Parser {
 }
 
 /*
-	Matches an ASSIGNMENT
+	Assignment  ←  Identifier '=' Expression
 */
 func Assignment() pg.Parser {
 	return pg.Specify(ASSIGNMENT,
@@ -111,7 +110,6 @@ func Assignment() pg.Parser {
 }
 
 /*
-	Matches an EXPRESSION
 	Expr ← Sum
 */
 func Expression() pg.Parser {
@@ -179,6 +177,9 @@ func ProductOperator() pg.Parser {
 		pg.Character('/'))
 }
 
+/*
+	Statement  ←  ControlStatement | Assignment
+*/
 func Statement() pg.Parser {
 	return pg.Trim(
 		pg.TryAny(
@@ -187,7 +188,7 @@ func Statement() pg.Parser {
 }
 
 /*
-	TODO
+	ControlStatement  ←  Loop
 */
 func ControlStatement() pg.Parser {
 	return pg.TryAny(
@@ -195,15 +196,16 @@ func ControlStatement() pg.Parser {
 }
 
 /*
-	TODO
+	Loop  ←  Foreach | For
 */
 func Loop() pg.Parser {
 	return pg.TryAny(
-		Foreach())
+		Foreach(),
+		For())
 }
 
 /*
-	TODO
+	Foreach  ←  'for' Identifier 'in' Identifier Block
 */
 func Foreach() pg.Parser {
 	return pg.Specify(FOREACH,
@@ -221,6 +223,36 @@ func Foreach() pg.Parser {
 			Block()))
 }
 
+/*
+	For  ←  'for' '(' Assignment* ';' Expression ';'
+		Assignment* ')' Block
+*/
+func For() pg.Parser {
+	return pg.Specify(FOR,
+		pg.Concat(
+			pg.Skip(
+				pg.String("for")),
+			pg.Whitespaces(),
+			pg.Parens(
+				pg.Concat(
+					pg.Many(
+						Assignment()),
+					pg.Whitespaces(),
+					pg.SkipChar(';'),
+					pg.Whitespaces(),
+					Expression(),
+					pg.Whitespaces(),
+					pg.SkipChar(';'),
+					pg.Whitespaces(),
+					pg.Many(
+						Assignment()))),
+			pg.Whitespaces(),
+			Block()))
+}
+
+/*
+	Block  ←  '{' Statement* '}'
+*/
 func Block() pg.Parser {
 	return pg.Specify(BLOCK,
 		pg.Trim(
@@ -236,15 +268,16 @@ func Block() pg.Parser {
 func main() {
 	in := new(pg.StringState)
 	in.SetInput(`
-		for man in men {
-			test = 0 + (1 + 2 * 3) * 4
+		test = true
+		for ( i = 0; test; i = i + 1 ) {
+			test = i + (1 + 2 * 3) * 4
 			varName = men
 			for person in people {
 				test = false
 			}
 		}
 		`)
-	out, ok := Statement()(in)
+	out, ok := pg.Many(Statement())(in)
 
 	fmt.Printf("Parse ok: %t\n", ok)
 	fmt.Printf("Left: %d\n", len(in.GetInput())-in.GetPosition())

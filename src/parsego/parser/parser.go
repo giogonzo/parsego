@@ -63,8 +63,10 @@ func Many(match Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
 		node := new(pt.ParseTree)
 		for {
+			initialPosition := in.GetPosition()
 			out, ok := match(in)
 			if !ok {
+				in.SetPosition(initialPosition)
 				break
 			}
 
@@ -88,8 +90,10 @@ func Many1(match Parser) Parser {
 		appendChild(node, out)
 
 		for {
+			initialPosition := in.GetPosition()
 			out, ok := match(in)
 			if !ok {
+				in.SetPosition(initialPosition)
 				break
 			}
 			appendChild(node, out)
@@ -246,6 +250,13 @@ func Skip(match Parser) Parser {
 */
 func Whitespaces() Parser {
 	return Skip(Many(Try(Whitespace())))
+}
+
+/*
+	Skips a character
+*/
+func SkipChar(c int) Parser {
+	return Skip(Character(c))
 }
 
 /*
