@@ -65,22 +65,22 @@ func (self *ParseState) GetProbeCount() int {
 	return self.probeCount
 }
 
-type RCache struct {
+type ParserCache struct {
 	parsers map[string]Parser
 }
 
-func (self *RCache) Get(id string) Parser {
+func (self *ParserCache) Get(id string) Parser {
 	return self.parsers[id]
 }
 
-func (self *RCache) Set(id string, match Parser) {
+func (self *ParserCache) Set(id string, match Parser) {
 	self.parsers[id] = match
 }
 
-var rCache Cache = initRCache()
+var cache Cache = initParserCache()
 
-func initRCache() Cache {
-	cache := new(RCache)
+func initParserCache() Cache {
+	cache := new(ParserCache)
 	cache.parsers = make(map[string]Parser)
 	return cache
 }
@@ -387,9 +387,9 @@ func Empty() Parser {
 */
 func Specify(nodeType int, match Parser) Parser {
 	specId := fmt.Sprintf("_SPEC_%d", nodeType)
-	cached := rCache.Get(specId)
+	cached := cache.Get(specId)
 	if cached == nil {
-		rCache.Set(specId, func(in State) (*pt.ParseTree, bool) {
+		cache.Set(specId, func(in State) (*pt.ParseTree, bool) {
 			out, ok := match(in)
 			if !ok {
 				return nil, false
@@ -401,7 +401,7 @@ func Specify(nodeType int, match Parser) Parser {
 			return out, true
 		})
 	}
-	return rCache.Get(specId)
+	return cache.Get(specId)
 }
 
 /*
@@ -409,17 +409,17 @@ func Specify(nodeType int, match Parser) Parser {
 */
 func Recursive(id string, matchMaker func() Parser) Parser {
 	recId := "_REC_" + id
-	cachedRec := rCache.Get(recId)
+	cachedRec := cache.Get(recId)
 	if cachedRec == nil {
-		rCache.Set(recId, func(in State) (*pt.ParseTree, bool) {
-			cached := rCache.Get(id)
+		cache.Set(recId, func(in State) (*pt.ParseTree, bool) {
+			cached := cache.Get(id)
 			if cached == nil {
-				rCache.Set(id, matchMaker())
+				cache.Set(id, matchMaker())
 			}
-			return rCache.Get(id)(in)
+			return cache.Get(id)(in)
 		})
 	}
-	return rCache.Get(recId)
+	return cache.Get(recId)
 }
 
 /*
