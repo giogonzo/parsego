@@ -3,8 +3,15 @@ package pt
 type ParseTree struct {
 	Value    []byte
 	Type     int
-	Parent   *ParseTree
 	Children []*ParseTree
+	Position InputPosition
+}
+
+type InputPosition struct {
+	StartPosition int
+	EndPosition   int
+	StartLine     int
+	EndLine       int
 }
 
 type Walker func(level int, node *ParseTree)

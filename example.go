@@ -21,9 +21,15 @@ const (
 	VALUE
 	FOREACH
 	FOR
+	FOR_INIT
+	FOR_CONDITION
+	FOR_STEP
 	BLOCK
 	IFTHEN
 	IFTHENELSE
+	SWITCH
+	CASE
+	CASE_ELSE
 	L_COMPARISON
 	L_E_COMPARISON
 	G_COMPARISON
@@ -36,6 +42,7 @@ const (
 	AND_EXPRESSION
 	FUNCTION_CALL
 	FUNCTION_DEFINITION
+	PROGRAM
 )
 
 var NODE_TYPES = map[int]string{
@@ -46,13 +53,20 @@ var NODE_TYPES = map[int]string{
 	STRING_LITERAL:      "STRING_LITERAL",
 	BOOL_LITERAL:        "BOOL_LITERAL",
 	ASSIGNMENT:          "ASSIGNMENT",
+	EXPRESSION:          "EXPRESSION",
 	SUM:                 "SUM",
 	PRODUCT:             "PRODUCT",
 	FOREACH:             "FOREACH",
 	FOR:                 "FOR",
+	FOR_INIT:            "FOR_INIT",
+	FOR_CONDITION:       "FOR_CONDITION",
+	FOR_STEP:            "FOR_STEP",
 	BLOCK:               "BLOCK",
 	IFTHEN:              "IFTHEN",
 	IFTHENELSE:          "IFTHENELSE",
+	SWITCH:              "SWITCH",
+	CASE:                "CASE",
+	CASE_ELSE:           "CASE_ELSE",
 	L_COMPARISON:        "L_COMPARISON",
 	L_E_COMPARISON:      "L_E_COMPARISON",
 	G_COMPARISON:        "G_COMPARISON",
@@ -65,6 +79,7 @@ var NODE_TYPES = map[int]string{
 	AND_EXPRESSION:      "AND_EXPRESSION",
 	FUNCTION_CALL:       "FUNCTION_CALL",
 	FUNCTION_DEFINITION: "FUNCTION_DEFINITION",
+	PROGRAM:             "PROGRAM",
 }
 
 /*
@@ -138,52 +153,56 @@ func Assignment() pg.Parser {
 }
 
 /*
-	Expr ← Comparison
+	Expr  ←  BoolExpression
 */
 func Expression() pg.Parser {
-	return pg.Trim(
-		BoolExpression())
+	return pg.Specify(EXPRESSION,
+		pg.Trim(
+			BoolExpression()))
 }
 
 /*
-	BoolExpression ←
+	BoolExpression  ←
 		  OrExpression
-		| AndExpression
-		| Comparison
 */
 func BoolExpression() pg.Parser {
-	return pg.TryAny(
-		OrExpression(),
-		AndExpression(),
-		Comparison())
+	return OrExpression()
 }
 
 /*
-	OrExpression ← 
+	OrExpression  ←
+		  AndExpression '||' AndExpression
+		| AndExpression
 */
 func OrExpression() pg.Parser {
-	return pg.Specify(OR_EXPRESSION,
-		pg.Concat(
-			Comparison(),
-			pg.Whitespaces(),
-			pg.Skip(
-				pg.String("||")),
-			pg.Whitespaces(),
-			Comparison()))
+	return pg.TryAny(
+		pg.Specify(OR_EXPRESSION,
+			pg.Concat(
+				AndExpression(),
+				pg.Whitespaces(),
+				pg.Skip(
+					pg.String("||")),
+				pg.Whitespaces(),
+				AndExpression())),
+		AndExpression())
 }
 
 /*
-	AndExpression ← 
+	AndExpression  ←
+		  Comparison '&&' Comparison
+		| Comparison
 */
 func AndExpression() pg.Parser {
-	return pg.Specify(AND_EXPRESSION,
-		pg.Concat(
-			Comparison(),
-			pg.Whitespaces(),
-			pg.Skip(
-				pg.String("&&")),
-			pg.Whitespaces(),
-			Comparison()))
+	return pg.TryAny(
+		pg.Specify(AND_EXPRESSION,
+			pg.Concat(
+				Comparison(),
+				pg.Whitespaces(),
+				pg.Skip(
+					pg.String("&&")),
+				pg.Whitespaces(),
+				Comparison())),
+		Comparison())
 }
 
 /*
@@ -315,8 +334,8 @@ func Product() pg.Parser {
 func Value() pg.Parser {
 	return pg.TryAny(
 		FunctionCall(),
-		Identifier(),
 		Literal(),
+		Identifier(),
 		pg.Parens(
 			pg.Recursive(
 				"Expression",
@@ -356,11 +375,12 @@ func Statement() pg.Parser {
 */
 func ControlStatement() pg.Parser {
 	return pg.TryAny(
-		Loop(),
-		If(),
 		Break(),
 		Continue(),
-		Return())
+		Return(),
+		Loop(),
+		If(),
+		Switch())
 }
 
 /*
@@ -392,9 +412,8 @@ func Foreach() pg.Parser {
 }
 
 /*
-	TODO
-	For  ←  'for' '(' Assignment* ';' Expression ';'
-		Assignment* ')' Block
+	For  ←  'for' '(' ForInit ';' ForCondition ';'
+		ForStep ')' Block
 */
 func For() pg.Parser {
 	return pg.Specify(FOR,
@@ -402,19 +421,71 @@ func For() pg.Parser {
 			pg.Skip(
 				pg.String("for")),
 			pg.Whitespaces(),
-			//pg.Many(
-			Assignment(), //),
+			ForInit(),
 			pg.Whitespaces(),
 			pg.SkipChar(';'),
 			pg.Whitespaces(),
-			Expression(),
+			ForCondition(),
 			pg.Whitespaces(),
 			pg.SkipChar(';'),
 			pg.Whitespaces(),
-			//pg.Many(
-			Assignment(), //),
+			ForStep(),
 			pg.Whitespaces(),
 			Block()))
+}
+
+/*
+	ForInit  ←  AssignmentList
+*/
+func ForInit() pg.Parser {
+	return pg.Specify(FOR_INIT,
+		AssignmentList())
+}
+
+/*
+	ForCondition  ←  Expression
+*/
+func ForCondition() pg.Parser {
+	return pg.Specify(FOR_CONDITION,
+		Expression())
+}
+
+/*
+	ForStep  ←  AssignmentList
+*/
+func ForStep() pg.Parser {
+	return pg.Specify(FOR_STEP,
+		AssignmentList())
+}
+
+/*
+	AssignmentList  ←
+		  AssignmentList1
+		| 'empty'
+*/
+func AssignmentList() pg.Parser {
+	return pg.Trim(
+		pg.TryAny(
+			AssignmentList1(),
+			pg.Empty()))
+}
+
+/*
+	AssignmentList1  ←
+		  Assignment ',' AssignmentList1
+		| Assignment
+*/
+func AssignmentList1() pg.Parser {
+	return pg.Trim(
+		pg.TryAny(
+			pg.Concat(
+				Assignment(),
+				pg.Whitespaces(),
+				pg.SkipChar(','),
+				pg.Recursive(
+					"AssignmentList1",
+					AssignmentList1)),
+			Assignment()))
 }
 
 /*
@@ -491,6 +562,22 @@ func Return() pg.Parser {
 }
 
 /*
+	Switch  ←  'switch' Expression SwitchBlock
+*/
+func Switch() pg.Parser {
+	return pg.Specify(SWITCH,
+		pg.Concat(
+			pg.Skip(
+				pg.String("switch")),
+			pg.Whitespaces(),
+			pg.Recursive(
+				"Expression",
+				Expression),
+			pg.Whitespaces(),
+			SwitchBlock()))
+}
+
+/*
 	Block  ←  '{' Statement* '}'
 */
 func Block() pg.Parser {
@@ -502,6 +589,60 @@ func Block() pg.Parser {
 					pg.Many(
 						Statement())),
 				pg.Character('}'))))
+}
+
+/*
+	SwitchBlock  ←  '{' Case* CaseElse? '}'
+*/
+func SwitchBlock() pg.Parser {
+	return pg.Trim(
+		pg.Between(
+			pg.Character('{'),
+			pg.Trim(
+				pg.Concat(
+					pg.Many(
+						Case()),
+					pg.Try(
+						CaseElse()))),
+			pg.Character('}')))
+}
+
+/*
+	Case  ←  'case' Expression ':' Block
+*/
+func Case() pg.Parser {
+	return pg.Specify(CASE,
+		pg.Trim(
+			pg.Concat(
+				pg.Skip(
+					pg.String("case")),
+				pg.Whitespaces(),
+				pg.Recursive(
+					"Expression",
+					Expression),
+				pg.Whitespaces(),
+				pg.SkipChar(':'),
+				pg.Whitespaces(),
+				pg.Recursive(
+					"Block",
+					Block))))
+}
+
+/*
+	CaseElse  ←  'else' ':' Block
+*/
+func CaseElse() pg.Parser {
+	return pg.Specify(CASE_ELSE,
+		pg.Trim(
+			pg.Concat(
+				pg.Skip(
+					pg.String("else")),
+				pg.Whitespaces(),
+				pg.SkipChar(':'),
+				pg.Whitespaces(),
+				pg.Recursive(
+					"Block",
+					Block))))
 }
 
 /*
@@ -517,10 +658,22 @@ func FunctionCall() pg.Parser {
 
 /*
 	ParamsList  ←
-		  Expression ',' ParamsList
+		  ParamsList1
 		| 'empty'
 */
 func ParamsList() pg.Parser {
+	return pg.Trim(
+		pg.TryAny(
+			ParamsList1(),
+			pg.Empty()))
+}
+
+/*
+	ParamsList1  ←
+		  Expression ',' ParamsList1
+		| Expression
+*/
+func ParamsList1() pg.Parser {
 	return pg.Trim(
 		pg.TryAny(
 			pg.Concat(
@@ -531,12 +684,11 @@ func ParamsList() pg.Parser {
 				pg.SkipChar(','),
 				pg.Whitespaces(),
 				pg.Recursive(
-					"ParamsList",
-					ParamsList)),
+					"ParamsList1",
+					ParamsList1)),
 			pg.Recursive(
 				"Expression",
-				Expression),
-			pg.Empty()))
+				Expression)))
 }
 
 /*
@@ -559,12 +711,23 @@ func FunctionDefinition() pg.Parser {
 }
 
 /*
-	TODO
 	NamedParamsList  ←
-		  Identifier ',' NamedParamsList
+		  NamedParamsList1
 		| 'empty'
 */
 func NamedParamsList() pg.Parser {
+	return pg.Trim(
+		pg.TryAny(
+			NamedParamsList1(),
+			pg.Empty()))
+}
+
+/*
+	NamedParamsList1  ←
+		  Identifier ',' NamedParamsList1
+		| Identifier
+*/
+func NamedParamsList1() pg.Parser {
 	return pg.Trim(
 		pg.TryAny(
 			pg.Concat(
@@ -573,17 +736,25 @@ func NamedParamsList() pg.Parser {
 				pg.SkipChar(','),
 				pg.Whitespaces(),
 				pg.Recursive(
-					"NamedParamsList",
-					NamedParamsList)),
-			Identifier(),
-			pg.Empty()))
+					"NamedParamsList1",
+					NamedParamsList1)),
+			Identifier()))
+}
+
+/*
+	Program  ←  Statement*
+*/
+func Program() pg.Parser {
+	return pg.Specify(PROGRAM,
+		pg.Many(
+			Statement()))
 }
 
 /*
 
 */
 func main() {
-	in := new(pg.ParseState)
+	in := pg.InitParser()
 	in.SetInput(`
 		func callMe(a, b) {
 			return a == b
@@ -591,7 +762,7 @@ func main() {
 		if test == false {
 			test = callMe(0, 0)
 		}
-		for i = 0; test; i = i + 1 {
+		for i = 0, k = 2; test; i = i + 1 {
 			test = test || i + (1 + 2 * 3) * 4 >= 20
 			varName = man
 			for person in people {
@@ -604,17 +775,31 @@ func main() {
 				}
 			}
 		}
-	`)
+		switch kind {
+			case "3": {
+				kind = "0"
+			}
+			case "4": {
+				kind = "1"
+			}
+			else: {
+				kind = "3"
+			}
+		}
+		`)
+
 	start := time.Now()
-	out, ok := pg.Many(Statement())(in)
+	out, ok := Program()(in)
 	end := time.Now()
 
-	out.Walk(0, func(level int, node *pt.ParseTree) {
-		for i := 0; i < level; i += 1 {
-			fmt.Print("|  ")
-		}
-		fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
-	})
+	for _, o := range out {
+		o.Walk(0, func(level int, node *pt.ParseTree) {
+			for i := 0; i < level; i += 1 {
+				fmt.Print("|  ")
+			}
+			fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
+		})
+	}
 	fmt.Printf("Input length: %d, probe count: %d, total: %s\n", len(in.GetInput()), in.GetProbeCount(), end.Sub(start).String())
 	fmt.Printf("Parse ok: %t\n", ok)
 	if len(in.GetInput())-in.GetPosition() > 0 {
