@@ -617,5 +617,7 @@ func main() {
 	})
 	fmt.Printf("Input length: %d, probe count: %d, total: %s\n", len(in.GetInput()), in.GetProbeCount(), end.Sub(start).String())
 	fmt.Printf("Parse ok: %t\n", ok)
-	fmt.Printf("Left: %d\n", len(in.GetInput())-in.GetPosition())
+	if len(in.GetInput())-in.GetPosition() > 0 {
+		fmt.Printf("Early stop at line: %d\n", in.GetLineCount())
+	}
 }

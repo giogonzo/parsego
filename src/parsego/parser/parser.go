@@ -12,6 +12,8 @@ type State interface {
 	GetInput() string
 	GetPosition() int
 	SetPosition(position int)
+	SetLineCount(lineCount int)
+	GetLineCount() int
 	GetProbeCount() int
 }
 
@@ -31,8 +33,9 @@ const (
 */
 
 type ParseState struct {
-	position   int
 	input      []byte
+	position   int
+	lineCount  int
 	probeCount int
 }
 
@@ -40,9 +43,13 @@ func (self *ParseState) Next() (int, bool) {
 	if self.position >= len(self.input) {
 		return 0, false
 	}
+	next := int(self.input[self.position])
 	self.position += 1
 	self.probeCount += 1
-	return int(self.input[self.position-1]), true
+	if next == '\n' {
+		self.lineCount += 1
+	}
+	return next, true
 }
 
 func (self *ParseState) SetInput(in string) {
@@ -59,6 +66,14 @@ func (self *ParseState) GetPosition() int {
 
 func (self *ParseState) SetPosition(position int) {
 	self.position = position
+}
+
+func (self *ParseState) GetLineCount() int {
+	return self.lineCount
+}
+
+func (self *ParseState) SetLineCount(lineCount int) {
+	self.lineCount = lineCount
 }
 
 func (self *ParseState) GetProbeCount() int {
@@ -96,13 +111,10 @@ func Many(match Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
 		node := new(pt.ParseTree)
 		for {
-			initialPosition := in.GetPosition()
-			out, ok := match(in)
+			out, ok := Try(match)(in)
 			if !ok {
-				in.SetPosition(initialPosition)
 				break
 			}
-
 			appendChild(node, out)
 		}
 		flatten(node)
@@ -123,10 +135,8 @@ func Many1(match Parser) Parser {
 		appendChild(node, out)
 
 		for {
-			initialPosition := in.GetPosition()
-			out, ok := match(in)
+			out, ok := Try(match)(in)
 			if !ok {
-				in.SetPosition(initialPosition)
 				break
 			}
 			appendChild(node, out)
@@ -187,9 +197,11 @@ func Concat(matches ...Parser) Parser {
 func Try(match Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
 		initialPosition := in.GetPosition()
+		initialLineCount := in.GetLineCount()
 		out, ok := match(in)
 		if !ok {
 			in.SetPosition(initialPosition)
+			in.SetLineCount(initialLineCount)
 		}
 		return out, ok
 	}
