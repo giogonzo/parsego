@@ -31,6 +31,7 @@ const (
 	E_COMPARISON
 	BREAK
 	CONTINUE
+	RETURN
 	OR_EXPRESSION
 	AND_EXPRESSION
 	FUNCTION_CALL
@@ -59,6 +60,7 @@ var NODE_TYPES = map[int]string{
 	E_COMPARISON:        "E_COMPARISON",
 	BREAK:               "BREAK",
 	CONTINUE:            "CONTINUE",
+	RETURN:              "RETURN",
 	OR_EXPRESSION:       "OR_EXPRESSION",
 	AND_EXPRESSION:      "AND_EXPRESSION",
 	FUNCTION_CALL:       "FUNCTION_CALL",
@@ -317,6 +319,7 @@ func Value() pg.Parser {
 		Literal(),
 		pg.Parens(
 			pg.Recursive(
+				"Expression",
 				Expression)))
 }
 
@@ -342,7 +345,9 @@ func Statement() pg.Parser {
 	return pg.Trim(
 		pg.TryAny(
 			FunctionDefinition(),
-			pg.Recursive(ControlStatement),
+			pg.Recursive(
+				"ControlStatement",
+				ControlStatement),
 			Assignment()))
 }
 
@@ -354,7 +359,8 @@ func ControlStatement() pg.Parser {
 		Loop(),
 		If(),
 		Break(),
-		Continue())
+		Continue(),
+		Return())
 }
 
 /*
@@ -473,6 +479,18 @@ func Continue() pg.Parser {
 }
 
 /*
+	Return  ←  'return'
+*/
+func Return() pg.Parser {
+	return pg.Specify(RETURN,
+		pg.Concat(
+			pg.Skip(
+				pg.String("return")),
+			pg.Whitespaces(),
+			Expression()))
+}
+
+/*
 	Block  ←  '{' Statement* '}'
 */
 func Block() pg.Parser {
@@ -500,19 +518,24 @@ func FunctionCall() pg.Parser {
 /*
 	ParamsList  ←
 		  Expression ',' ParamsList
-		| Expression
 		| 'empty'
 */
 func ParamsList() pg.Parser {
 	return pg.Trim(
 		pg.TryAny(
 			pg.Concat(
-				pg.Recursive(Expression),
+				pg.Recursive(
+					"Expression",
+					Expression),
 				pg.Whitespaces(),
 				pg.SkipChar(','),
 				pg.Whitespaces(),
-				pg.Recursive(ParamsList)),
-			pg.Recursive(Expression),
+				pg.Recursive(
+					"ParamsList",
+					ParamsList)),
+			pg.Recursive(
+				"Expression",
+				Expression),
 			pg.Empty()))
 }
 
@@ -530,14 +553,15 @@ func FunctionDefinition() pg.Parser {
 			pg.Parens(
 				NamedParamsList()),
 			pg.Whitespaces(),
-			// return type
-			pg.Recursive(Block)))
+			pg.Recursive(
+				"Block",
+				Block)))
 }
 
 /*
+	TODO
 	NamedParamsList  ←
 		  Identifier ',' NamedParamsList
-		| Identifier
 		| 'empty'
 */
 func NamedParamsList() pg.Parser {
@@ -548,7 +572,9 @@ func NamedParamsList() pg.Parser {
 				pg.Whitespaces(),
 				pg.SkipChar(','),
 				pg.Whitespaces(),
-				pg.Recursive(NamedParamsList)),
+				pg.Recursive(
+					"NamedParamsList",
+					NamedParamsList)),
 			Identifier(),
 			pg.Empty()))
 }
@@ -559,10 +585,11 @@ func NamedParamsList() pg.Parser {
 func main() {
 	in := new(pg.ParseState)
 	in.SetInput(`
-		func callMe() {
+		func callMe(a, b) {
+			return a == b
 		}
 		if test == false {
-			test = callMe()
+			test = callMe(0, 0)
 		}
 		for i = 0; test; i = i + 1 {
 			test = test || i + (1 + 2 * 3) * 4 >= 20
@@ -582,14 +609,13 @@ func main() {
 	out, ok := pg.Many(Statement())(in)
 	end := time.Now()
 
-	fmt.Printf("Input length: %d, probe count: %d, total: %s\n", len(in.GetInput()), in.GetProbeCount(), end.Sub(start).String())
-	fmt.Printf("Parse ok: %t\n", ok)
-	fmt.Printf("Left: %d\n", len(in.GetInput())-in.GetPosition())
-	fmt.Print("Parsed:\n")
 	out.Walk(0, func(level int, node *pt.ParseTree) {
 		for i := 0; i < level; i += 1 {
 			fmt.Print("|  ")
 		}
 		fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
 	})
+	fmt.Printf("Input length: %d, probe count: %d, total: %s\n", len(in.GetInput()), in.GetProbeCount(), end.Sub(start).String())
+	fmt.Printf("Parse ok: %t\n", ok)
+	fmt.Printf("Left: %d\n", len(in.GetInput())-in.GetPosition())
 }

@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"fmt"
 	"parsego/parsetree"
 	"regexp"
 )
@@ -15,6 +16,11 @@ type State interface {
 }
 
 type Parser func(in State) (*pt.ParseTree, bool)
+
+type Cache interface {
+	Get(id string) Parser
+	Set(id string, match Parser)
+}
 
 const (
 	TYPE_UNDEFINED = 0
@@ -57,6 +63,26 @@ func (self *ParseState) SetPosition(position int) {
 
 func (self *ParseState) GetProbeCount() int {
 	return self.probeCount
+}
+
+type RCache struct {
+	parsers map[string]Parser
+}
+
+func (self *RCache) Get(id string) Parser {
+	return self.parsers[id]
+}
+
+func (self *RCache) Set(id string, match Parser) {
+	self.parsers[id] = match
+}
+
+var rCache Cache = initRCache()
+
+func initRCache() Cache {
+	cache := new(RCache)
+	cache.parsers = make(map[string]Parser)
+	return cache
 }
 
 /*
@@ -115,10 +141,6 @@ func Many1(match Parser) Parser {
 	Wrap parsers in Try(...) calls to preserve state
 */
 func Any(matches ...Parser) Parser {
-	return any(matches)
-}
-
-func any(matches []Parser) Parser {
 	return func(in State) (*pt.ParseTree, bool) {
 		for _, match := range matches {
 			out, ok := match(in)
@@ -138,7 +160,7 @@ func TryAny(matches ...Parser) Parser {
 	for i, match := range matches {
 		matches[i] = Try(match)
 	}
-	return any(matches)
+	return Any(matches...)
 }
 
 /*
@@ -270,12 +292,10 @@ func SkipChar(c int) Parser {
 	Trims matching
 */
 func Trim(match Parser) Parser {
-	return func(in State) (*pt.ParseTree, bool) {
-		Whitespaces()(in)
-		out, ok := match(in)
-		Whitespaces()(in)
-		return out, ok
-	}
+	return Between(
+		Whitespaces(),
+		match,
+		Whitespaces())
 }
 
 /*
@@ -366,26 +386,40 @@ func Empty() Parser {
 	Specifies a Node Type
 */
 func Specify(nodeType int, match Parser) Parser {
-	return func(in State) (*pt.ParseTree, bool) {
-		out, ok := match(in)
-		if !ok {
-			return nil, false
-		}
-		if out == nil {
-			out = new(pt.ParseTree)
-		}
-		out.Type = nodeType
-		return out, true
+	specId := fmt.Sprintf("_SPEC_%d", nodeType)
+	cached := rCache.Get(specId)
+	if cached == nil {
+		rCache.Set(specId, func(in State) (*pt.ParseTree, bool) {
+			out, ok := match(in)
+			if !ok {
+				return nil, false
+			}
+			if out == nil {
+				out = new(pt.ParseTree)
+			}
+			out.Type = nodeType
+			return out, true
+		})
 	}
+	return rCache.Get(specId)
 }
 
 /*
 	Helper for recursive rules
 */
-func Recursive(match func() Parser) Parser {
-	return func(in State) (*pt.ParseTree, bool) {
-		return match()(in)
+func Recursive(id string, matchMaker func() Parser) Parser {
+	recId := "_REC_" + id
+	cachedRec := rCache.Get(recId)
+	if cachedRec == nil {
+		rCache.Set(recId, func(in State) (*pt.ParseTree, bool) {
+			cached := rCache.Get(id)
+			if cached == nil {
+				rCache.Set(id, matchMaker())
+			}
+			return rCache.Get(id)(in)
+		})
 	}
+	return rCache.Get(recId)
 }
 
 /*
