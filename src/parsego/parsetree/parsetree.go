@@ -7,6 +7,7 @@ type ParseTree struct {
 	Position    InputPosition
 	ActualValue interface{}
 	ActualType  interface{}
+	ActualId    string
 }
 
 type InputPosition struct {
@@ -16,13 +17,15 @@ type InputPosition struct {
 	EndLine       int
 }
 
-type Walker func(level int, node *ParseTree, env interface{})
+type Walker func(level int, node *ParseTree, env interface{}) bool
 
 func (self *ParseTree) Walk(level int, walkerDown, walkerUp Walker, env interface{}) {
 	if self == nil {
 		return
 	}
-	walkerDown(level, self, env)
+	if walkerDown(level, self, env) {
+		return
+	}
 	for _, child := range self.Children {
 		child.Walk(level+1, walkerDown, walkerUp, env)
 	}

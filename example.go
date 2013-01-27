@@ -803,11 +803,12 @@ func main() {
 	}
 }
 
-func printNode(level int, node *pt.ParseTree, e interface{}) {
+func printNode(level int, node *pt.ParseTree, e interface{}) bool {
 	for i := 0; i < level; i += 1 {
 		fmt.Print("|  ")
 	}
 	fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
+	return false
 }
 
-func none(level int, node *pt.ParseTree, e interface{}) {}
+func none(level int, node *pt.ParseTree, e interface{}) bool { return false }
