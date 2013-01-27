@@ -364,6 +364,7 @@ func Statement() pg.Parser {
 	return pg.Trim(
 		pg.TryAny(
 			FunctionDefinition(),
+			FunctionCall(),
 			pg.Recursive(
 				"ControlStatement",
 				ControlStatement),
@@ -793,16 +794,18 @@ func main() {
 	end := time.Now()
 
 	for _, o := range out {
-		o.Walk(0, func(level int, node *pt.ParseTree) {
-			for i := 0; i < level; i += 1 {
-				fmt.Print("|  ")
-			}
-			fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
-		})
+		o.Walk(0, printNode)
 	}
 	fmt.Printf("Input length: %d, probe count: %d, total: %s\n", len(in.GetInput()), in.GetProbeCount(), end.Sub(start).String())
 	fmt.Printf("Parse ok: %t\n", ok)
 	if len(in.GetInput())-in.GetPosition() > 0 {
 		fmt.Printf("Early stop at line: %d\n", in.GetLineCount())
 	}
+}
+
+func printNode(level int, node *pt.ParseTree) {
+	for i := 0; i < level; i += 1 {
+		fmt.Print("|  ")
+	}
+	fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
 }

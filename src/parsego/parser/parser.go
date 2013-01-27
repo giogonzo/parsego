@@ -423,7 +423,7 @@ func Specify(nodeType int, match Parser) Parser {
 			nodes := []*pt.ParseTree{new(pt.ParseTree)}
 			nodes[0].Type = nodeType
 			nodes[0].Position = *pos
-			if out != nil && out[0].Type == TYPE_UNDEFINED {
+			if out != nil && len(out) > 0 && out[0].Type == TYPE_UNDEFINED {
 				nodes[0].Value = out[0].Value
 			} else {
 				appendChildren(nodes[0], out)
