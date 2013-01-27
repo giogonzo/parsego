@@ -794,7 +794,7 @@ func main() {
 	end := time.Now()
 
 	for _, o := range out {
-		o.Walk(0, printNode)
+		o.Walk(0, printNode, none, nil)
 	}
 	fmt.Printf("Input length: %d, probe count: %d, total: %s\n", len(in.GetInput()), in.GetProbeCount(), end.Sub(start).String())
 	fmt.Printf("Parse ok: %t\n", ok)
@@ -803,9 +803,11 @@ func main() {
 	}
 }
 
-func printNode(level int, node *pt.ParseTree) {
+func printNode(level int, node *pt.ParseTree, e interface{}) {
 	for i := 0; i < level; i += 1 {
 		fmt.Print("|  ")
 	}
 	fmt.Printf("%s [%s]\n", NODE_TYPES[node.Type], node.Value)
 }
+
+func none(level int, node *pt.ParseTree, e interface{}) {}
