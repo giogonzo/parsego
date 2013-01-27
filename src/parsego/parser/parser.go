@@ -247,6 +247,24 @@ func Char() Parser {
 }
 
 /*
+	Matches [^c]
+*/
+func AnyCharBut(c int) Parser {
+	return func(in State) ([]*pt.ParseTree, bool) {
+		target, ok := in.Next()
+		if ok {
+			match, _ := regexp.Match(fmt.Sprintf("[^%c]", c), []byte{byte(target)})
+			if match {
+				node := new(pt.ParseTree)
+				node.Value = []byte{byte(target)}
+				return []*pt.ParseTree{node}, true
+			}
+		}
+		return nil, false
+	}
+}
+
+/*
 	Matches [0-9]
 */
 func Number() Parser {

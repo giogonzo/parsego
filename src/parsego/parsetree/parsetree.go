@@ -1,10 +1,12 @@
 package pt
 
 type ParseTree struct {
-	Value    []byte
-	Type     int
-	Children []*ParseTree
-	Position InputPosition
+	Value       []byte
+	Type        int
+	Children    []*ParseTree
+	Position    InputPosition
+	ActualValue interface{}
+	ActualType  interface{}
 }
 
 type InputPosition struct {
@@ -14,14 +16,15 @@ type InputPosition struct {
 	EndLine       int
 }
 
-type Walker func(level int, node *ParseTree)
+type Walker func(level int, node *ParseTree, env interface{})
 
-func (self *ParseTree) Walk(level int, walker Walker) {
+func (self *ParseTree) Walk(level int, walkerDown, walkerUp Walker, env interface{}) {
 	if self == nil {
 		return
 	}
-	walker(level, self)
+	walkerDown(level, self, env)
 	for _, child := range self.Children {
-		child.Walk(level+1, walker)
+		child.Walk(level+1, walkerDown, walkerUp, env)
 	}
+	walkerUp(level, self, env)
 }
